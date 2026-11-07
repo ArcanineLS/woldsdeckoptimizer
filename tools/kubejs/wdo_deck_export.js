@@ -351,6 +351,9 @@ const WDO_TIPS = {
 /** Button with a wrapped hover tooltip describing what it does. */
 function wdoButton(screen, x, y, w, label, tip, onPress) {
   return new WDO_Button(x, y, w, WDO_H, new WDO_Text(label), onPress, (b, pose, mx, my) => {
+    // Rhino routes both OnTooltip methods here: onTooltip(button, pose, x, y) and narrateTooltip(consumer).
+    // The narration call has no pose / position: ignore it.
+    if (pose == null || mx == null || my == null) return
     const mc = WDO_Minecraft.getInstance()
     // Forge's 5-argument overload (lines, x, y, font): the 4-argument renderTooltip is ambiguous in Rhino
     // (a List also converts to a Component), which throws while rendering and crashes the game
