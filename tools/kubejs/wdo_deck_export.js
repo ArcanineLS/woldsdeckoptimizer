@@ -352,7 +352,9 @@ const WDO_TIPS = {
 function wdoButton(screen, x, y, w, label, tip, onPress) {
   return new WDO_Button(x, y, w, WDO_H, new WDO_Text(label), onPress, (b, pose, mx, my) => {
     const mc = WDO_Minecraft.getInstance()
-    screen.renderTooltip(pose, mc.font.split(new WDO_Text(tip), 200), mx, my)
+    // Forge's 5-argument overload (lines, x, y, font): the 4-argument renderTooltip is ambiguous in Rhino
+    // (a List also converts to a Component), which throws while rendering and crashes the game
+    screen.renderTooltip(pose, mc.font.split(new WDO_Text(tip), 200), mx, my, mc.font)
   })
 }
 
