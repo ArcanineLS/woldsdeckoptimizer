@@ -1,0 +1,18 @@
+# Local tooling and build caches
+__pycache__/
+.claude/
+node_modules/
+*.log
+
+# Development notes (internal, not part of the site)
+memory.md
+
+# Personal game data: deck / collection exports used as test fixtures
+tests/fixtures/
+
+# OS and editor files
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

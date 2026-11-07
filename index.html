@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wold's Vault Deck Optimizer</title>
+  <meta name="description" content="Card deck calculator and placement optimizer for Wold's Vaults / Vault Hunters 3rd Edition. Formulas and data extracted from the mod JARs.">
+  <link rel="icon" href="assets/img/gui/the_vault__item_card_deck.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1><img class="px" src="assets/img/gui/the_vault__item_card_deck.png" alt="">Wold's Vault Deck Optimizer</h1>
+    <span class="ver" id="ver"></span>
+    <span class="spacer"></span>
+    <button class="btn sm primary" id="btn-import-deck" title="Import a deck copied from the game">Import deck</button>
+    <button class="btn sm" id="btn-compare-decks" title="Compare two decks side by side">Compare decks</button>
+    <button class="btn sm" id="btn-share" title="Copy a link containing the current deck and collection">Copy share link</button>
+    <button class="btn sm" id="btn-export">Export</button>
+    <label class="btn sm" for="file-import">Import</label>
+    <input type="file" id="file-import" accept="application/json" hidden>
+    <button class="btn sm danger" id="btn-reset">Reset</button>
+  </header>
+
+  <main class="layout">
+    <!-- Deck & cores -->
+    <section class="col-deck stack">
+      <div class="panel">
+        <header>Deck</header>
+        <div class="body stack">
+          <div id="deck-picker"></div>
+          <div class="note" id="deck-info"></div>
+          <div id="implicit-box"></div>
+          <div class="row">
+            <label class="chk"><input type="checkbox" id="layout-edit"> Edit layout</label>
+          </div>
+          <div class="note" id="layout-note" hidden>Click a cell to cycle: No Slot → Slot → Arcane Slot. For Construction and Arcane cores, use Select Slots on the core instead.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <header>Deck cores <span class="mono" id="socket-count"></span></header>
+        <div class="body stack">
+          <div id="core-list" class="stack"></div>
+          <div class="row">
+            <div id="core-picker"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Deck grid + stats -->
+    <section class="stack" style="min-width:0">
+      <div class="panel">
+        <header>
+          <span id="deck-title">Layout</span>
+          <span class="mono" id="score"></span>
+        </header>
+        <div class="body stack">
+          <div class="grid-wrap"><div class="deck-grid" id="grid"></div></div>
+          <div class="row" id="slot-actions" style="justify-content:center"></div>
+          <div class="ctl-group">
+            <div class="ctl-title">Optimize your cards</div>
+            <div class="row" style="align-items:end">
+              <button class="btn primary" id="btn-opt" title="Best placement of the cards in your collection">Optimize placement</button>
+              <button class="btn" id="btn-opt-compare" title="Optimize, then compare the new layout with the current one before keeping it">Optimize + Compare</button>
+              <button class="btn" id="btn-clear">Clear deck</button>
+              <button class="btn" id="btn-plan" title="Copy this layout; the KubeJS script's Apply Layout button rearranges the deck in game">Copy layout for game</button>
+              <label class="f" style="flex:0 0 110px">Search time (s)
+                <input type="number" id="opt-time" min="1" max="600" step="1" value="10">
+              </label>
+            </div>
+          </div>
+          <div class="ctl-group">
+            <div class="ctl-title">Auto build <span class="note">balanced with survivability · Auto-create / Auto-finish use any card packs can roll · Build from collection uses only your cards</span></div>
+            <div class="auto-grid">
+              <label class="f">Focus<select id="auto-focus"></select></label>
+              <label class="f">Balance<select id="auto-balance"></select></label>
+              <label class="f" title="Only cards of one color in the deck (Greed and Arcane cards included). Majority color = the most common color of the placed cards, else of your collection.">Single color<select id="auto-onecolor">
+                <option value="">Off (any colors)</option>
+                <option value="majority">Majority color</option>
+                <option value="GREEN">Green only</option>
+                <option value="BLUE">Blue only</option>
+                <option value="YELLOW">Yellow only</option>
+                <option value="RED">Red only</option>
+              </select></label>
+              <div class="auto-btns">
+                <button class="btn" type="button" id="btn-auto-create" title="Build the whole deck for this focus (locked slots are kept)">Auto-create</button>
+                <button class="btn" type="button" id="btn-auto-finish" title="Fill only the empty slots for this focus; placed cards stay">Auto-finish</button>
+                <button class="btn" type="button" id="btn-auto-collection" title="Build the whole deck for this focus using only cards in your collection (not Planned ones); locked slots are kept">Build from collection</button>
+              </div>
+            </div>
+            <div class="auto-custom" id="auto-custom" hidden></div>
+            <label class="chk"><input type="checkbox" id="auto-cores" checked> Also choose cores and implicits (best variant and roll)</label>
+            <label class="chk" title="Only cards whose scaling (and condition) color is the card's own color, e.g. a Blue card that scales For Each Blue. Lines without a color filter are allowed."><input type="checkbox" id="auto-samecolor"> Same-color scaling (a card's scaling color must be its own color)</label>
+            <label class="chk" title="Greed cards may be any color even with Single color or Same-color scaling; their color only matters to scalers, their job is to multiply the card they target."><input type="checkbox" id="auto-anygreed"> Allow any Greed card (Greed cards ignore the color options)</label>
+            <div class="auto-custom" id="auto-banned"></div>
+            <div class="note">Uses the Search time above; 30 s or more gives better auto builds.</div>
+          </div>
+          <div class="progress"><div id="opt-progress"></div></div>
+          <div class="note" id="opt-result" role="status"></div>
+          <div class="note">Click a slot to select it, then click a card in the collection to place it. Drag cards onto slots or between slots. Locked slots are kept by the optimizer.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <header>Deck statistics <span class="note" style="text-transform:none;letter-spacing:0">Weight = optimizer priority per displayed unit</span></header>
+        <div class="body" style="overflow-x:auto">
+          <div class="priority" style="margin-bottom:8px">
+            <span class="note" style="flex:0 0 auto">Score by</span>
+            <select id="score-mode" style="width:auto">
+              <option value="mult">Multipliers (scaler × efficiency × greed)</option>
+              <option value="totals">Deck totals</option>
+            </select>
+            <label class="chk" style="margin-left:auto"><input type="checkbox" id="stats-nonzero"> Only stats with values</label>
+          </div>
+          <div class="priority">
+            <span class="note" style="flex:0 0 auto">Priority</span>
+            <div id="priority-box" class="priority-box"></div>
+          </div>
+          <div class="note" id="priority-note" style="margin:4px 0 8px"></div>
+          <table class="stats" id="stats"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Collection -->
+    <section class="stack">
+      <div class="panel">
+        <header>Save deck</header>
+        <div class="body stack">
+          <form class="row" id="save-form" autocomplete="off">
+            <input type="text" id="save-name" maxlength="60" placeholder="Deck name" aria-label="Deck name">
+            <button class="btn primary" type="submit" id="btn-save-deck">Save</button>
+          </form>
+          <div class="note" id="save-msg" role="status"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <header>Load deck <span class="mono" id="saved-count"></span></header>
+        <div class="body stack">
+          <div id="saved-list" class="saved-list"></div>
+          <div class="row"><button class="btn" type="button" id="btn-new-deck">New deck</button></div>
+        </div>
+      </div>
+      <div class="panel">
+        <header>Collection
+          <span class="tabs" role="tablist">
+            <button class="tab" type="button" role="tab" id="tab-cards" data-tab="cards">Cards <span class="mono" id="card-count"></span></button>
+            <button class="tab" type="button" role="tab" id="tab-cores" data-tab="cores">Cores <span class="mono" id="owned-core-count"></span></button>
+          </span>
+        </header>
+        <div id="coll-cards">
+          <div class="body stack">
+            <div class="row">
+              <input type="search" id="card-search" placeholder="Filter cards">
+              <button class="btn" id="btn-import-coll" style="flex:0 0 auto" title="Paste a Copy Collection export from the game">Import</button>
+              <button class="btn primary" id="btn-add-card" style="flex:0 0 auto">Add card</button>
+            </div>
+            <div class="row">
+              <label class="chk"><input type="checkbox" id="only-unplaced"> Unplaced only</label>
+            </div>
+          </div>
+          <div class="card-list" id="card-list"></div>
+        </div>
+        <div id="coll-cores" hidden>
+          <div class="body stack">
+            <div class="note">Cores you own, with the variant and value rolled on them. Socket one to put it in the deck; Build from collection only chooses from these.</div>
+            <div id="owned-core-picker"></div>
+            <div id="owned-core-list" class="stack"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="card-dialog">
+    <form method="dialog" id="card-form">
+      <header><span id="cd-title">Add card</span><button class="btn sm" value="cancel" formnovalidate>Close</button></header>
+      <div class="body">
+        <label class="f">Card (search by name or effect)<div id="cd-picker"></div></label>
+        <div class="tip card-preview" id="cd-preview" aria-live="polite"></div>
+        <div class="row">
+          <label class="f">Tier<select id="cd-tier"></select></label>
+          <label class="f"><span id="cd-value-label">Value</span><input type="number" id="cd-value" step="any"></label>
+          <label class="f" style="flex:0 0 80px">Copies<input type="number" id="cd-copies" min="1" max="50" value="1"></label>
+        </div>
+        <div class="note" id="cd-value-note"></div>
+        <div class="row" id="cd-task" hidden></div>
+        <fieldset><legend>Color</legend><div class="seg" id="cd-colors"></div></fieldset>
+        <fieldset><legend>Extra groups</legend><div class="seg" id="cd-groups"></div></fieldset>
+        <fieldset>
+          <legend>Scaling line ("&gt; For Each … Card")</legend>
+          <div id="cd-scaler" class="stack"></div>
+          <div><button type="button" class="btn sm" id="cd-add-scaler">Add scaler</button></div>
+        </fieldset>
+        <fieldset>
+          <legend>Condition line ("&gt; Requires …")</legend>
+          <div id="cd-condition" class="stack"></div>
+          <div><button type="button" class="btn sm" id="cd-add-condition">Add condition</button></div>
+        </fieldset>
+      </div>
+      <footer>
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" id="cd-save" value="save">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="import-dialog">
+    <form method="dialog">
+      <header><span id="import-title">Import deck from game</span><button class="btn sm" value="cancel" formnovalidate>Close</button></header>
+      <div class="body">
+        <div class="note">Paste what the game copied (KubeJS script <a href="tools/kubejs/wdo_deck_export.js" download>wdo_deck_export.js</a> in <span class="mono">kubejs/startup_scripts</span>):
+          <b>Copy for Optimizer</b> on an open deck imports that deck; <b>Copy Collection</b> (next to the JEI search bar) adds every card and deck core you have open (inventory, chest, Card Binder, Tom's Storage terminal, and the cards and cores inside decks) to your collection. The output of <span class="mono">/data get entity @s SelectedItem</span> is also accepted for a deck.</div>
+        <textarea id="import-text" rows="8" spellcheck="false" placeholder="WDO-DECK {...}"></textarea>
+        <label class="chk"><input type="checkbox" id="import-keep"> Keep current collection (add the deck's cards to it)</label>
+        <div class="note" id="import-msg" role="status"></div>
+      </div>
+      <footer>
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" type="button" id="import-go">Import</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="custom-dialog" class="wide">
+    <form method="dialog">
+      <header><span>Custom auto build</span><button class="btn sm" value="cancel" formnovalidate>Close</button></header>
+      <div class="body">
+        <div class="note">Choose the card types auto build may use and the card effects to build for. The effects are balanced against survivability (Balance setting).</div>
+        <fieldset><legend>Card types</legend><div class="seg" id="cu-types"></div></fieldset>
+        <fieldset>
+          <legend>Card effects <span id="cu-count"></span></legend>
+          <div class="row"><input type="search" id="cu-search" placeholder="Search effects"><button class="btn sm" type="button" id="cu-clear">Clear selection</button></div>
+          <div id="cu-effects" class="cu-effects"></div>
+        </fieldset>
+        <div class="note" id="cu-msg" role="status"></div>
+      </div>
+      <footer>
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" type="button" id="cu-save">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="ban-dialog" class="wide">
+    <form method="dialog">
+      <header><span>Banned cards</span><button class="btn sm" value="close" formnovalidate>Close</button></header>
+      <div class="body">
+        <div class="note">Auto build never adds a banned card to the deck (Auto-create, Auto-finish and Build from collection). Cards in locked slots and cards already placed by Auto-finish are kept.</div>
+        <fieldset>
+          <legend>Cards <span id="ban-count"></span></legend>
+          <div class="row"><input type="search" id="ban-search" placeholder="Search cards"><button class="btn sm" type="button" id="ban-clear">Unban all</button></div>
+          <div id="ban-list" class="cu-effects"></div>
+        </fieldset>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="compare-dialog" class="wide">
+    <form method="dialog">
+      <header><span>Compare layouts</span><button class="btn sm" value="keep" formnovalidate>Close</button></header>
+      <div class="body">
+        <div class="note" id="cmp-summary"></div>
+        <div style="overflow-x:auto"><table class="stats" id="cmp-table"></table></div>
+      </div>
+      <footer>
+        <button class="btn" type="button" id="cmp-revert">Revert to previous layout</button>
+        <button class="btn primary" value="keep">Keep optimized layout</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="decks-dialog" class="page">
+    <form method="dialog">
+      <header><span>Compare decks</span><button class="btn sm" value="close" formnovalidate>Close</button></header>
+      <div class="body">
+        <div class="cmp-pick">
+          <label class="f">Deck A<select id="cmp-a"></select></label>
+          <label class="f">Deck B<select id="cmp-b"></select></label>
+        </div>
+        <div class="cmp-sides">
+          <div class="cmp-side" id="cmp-side-a"></div>
+          <div class="cmp-side" id="cmp-side-b"></div>
+        </div>
+        <div style="overflow-x:auto"><table class="stats" id="cmp-decks-table"></table></div>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="tip" id="tip" hidden></div>
+
+  <footer class="site">
+    Data extracted from <span class="mono">the_vault</span> and <span class="mono">wolds-vaults-official-mod</span> JARs and the pack's card configs.
+    Not affiliated with Iskallia or the Wold's Vaults team. Formula reference: <a href="README.md">README</a>.
+  </footer>
+
+  <script src="js/engine.js"></script>
+  <script src="js/optimizer.js"></script>
+  <script src="js/deckimport.js"></script>
+  <script src="js/autobuild.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
